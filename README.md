@@ -498,3 +498,139 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 Made with ❤️ by the APort community
 
 </div>
+
+## 🛠️ Custom n8n Node for APort Verification
+
+Creating a custom n8n node for APort verification allows you to integrate APort's trust rail into your workflows, enabling secure agent interactions. This node will accept a Passport ID and context, then use the APort SDK to verify the identity of the agent. Based on the response, it will route your workflow accordingly.
+
+### 🧱 Node Structure
+
+The node will have the following structure:
+
+- **Name**: `APort Verify`
+- **Description**: Verifies an agent's identity using APort and routes workflow based on the verification result.
+- **Inputs**: `passportId`, `context`
+- **Outputs**: `verified`, `rejected`, `unknown`
+
+### 📜 Node Code
+
+Below is the implementation of the custom n8n node:
+
+```javascript
+const { Node, NodeParameter, NodeParameterType, NodeResult } = require('n8n');
+
+class AportVerifyNode extends Node {
+  constructor() {
+    super({
+      name: 'APort Verify',
+      description: 'Verifies an agent\'s identity using APort and routes workflow based on the verification result.',
+      category: 'aport',
+      input: {
+        passportId: new NodeParameter({
+          name: 'passportId',
+          description: 'The Passport ID of the agent to verify.',
+          type: NodeParameterType.STRING,
+          required: true,
+        }),
+        context: new NodeParameter({
+          name: 'context',
+          description: 'The context to pass to the APort verification service.',
+          type: NodeParameterType.OBJECT,
+          required: true,
+        }),
+      },
+      output: {
+        verified: new NodeParameter({
+          name: 'verified',
+          description: 'Output if the agent is verified.',
+          type: NodeParameterType.STRING,
+          required: true,
+        }),
+        rejected: new NodeParameter({
+          name: 'rejected',
+          description: 'Output if the agent is rejected.',
+          type: NodeParameterType.STRING,
+          required: true,
+        }),
+        unknown: new NodeParameter({
+          name: 'unknown',
+          description: 'Output if the agent status is unknown.',
+          type: NodeParameterType.STRING,
+          required: true,
+        }),
+      },
+    });
+  }
+
+  async execute() {
+    const { passportId, context } = this.getInputData()[0];
+    const { verified, rejected, unknown } = this.getOutputDefinitions();
+
+    try {
+      const sdk = require('@aporthq/sdk-node');
+      const result = await sdk.verify(passportId, context);
+
+      if (result.status === 'verified') {
+        this.setOutput(verified, JSON.stringify(result));
+      } else if (result.status === 'rejected') {
+        this.setOutput(rejected, JSON.stringify(result));
+      } else {
+        this.setOutput(unknown, JSON.stringify(result));
+      }
+    } catch (error) {
+      this.throwError('APort verification failed', error.message);
+    }
+  }
+}
+
+module.exports = new AportVerifyNode();
+```
+
+### 📌 Example Workflow
+
+Here's an example workflow that uses the `APort Verify` node:
+
+```json
+{
+  "nodes": [
+    {
+      "parameters": {
+        "passportId": "passport123",
+        "context": {
+          "repo": "user/repo",
+          "base": "main",
+          "head": "feature-branch",
+          "files_changed": ["file1.js", "file2.js"]
+        }
+      },
+      "name": "APort Verify",
+      "type": "aportVerify"
+    },
+    {
+      "parameters": {
+        "items": [
+          {
+            "name": "verified",
+            "value": "Agent verified successfully."
+          }
+        ]
+      },
+      "name": "Set Item",
+      "type": "setItem"
+    }
+  ],
+  "connections": {
+    "APort Verify": {
+      "main": [
+        ["verified", "Set Item"]
+      ]
+    }
+  }
+}
+```
+
+### ✅ Best Practices
+
+- Always use environment variables for secrets instead of hardcoding them.
+- Include comprehensive error handling to ensure robustness.
+- Provide clear documentation and examples for users to understand how to use the node effectively.
